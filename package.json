@@ -1,6 +1,6 @@
 {
   "name": "latude-contracts",
-  "version": "1.0.0",
+  "version": "0.1.0",
   "description": "Smart contracts of the latude project.",
   "main": "Gruntfile.js",
   "scripts": {
