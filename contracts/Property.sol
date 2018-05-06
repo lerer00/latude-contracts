@@ -1,100 +1,105 @@
-pragma solidity ^0.4.18;
+pragma solidity ^0.4.21;
 
 import "./Authorization.sol";
 import "./PropertyAuthority.sol";
 import "./ExchangeRates.sol";
-import "./StayLinkedList.sol";
+import "./WheightedLinkedList.sol";
 
-contract Property is Authorization, StayLinkedList {
-    string public name;
-    mapping(uint => mapping(uint => Stay)) public stays;
+contract Property is Authorization, WheightedLinkedList {
+    string public id;
     
-    // All assets are tracked within this array.
+    // all assets are tracked within this array
     Asset[] private assets;
-    // We need to query an already deployed exhange.
-    ExchangeRates private exchangeRates;
-    // We need to attach to the good authority
-    PropertyAuthority private propertyAuthority;
-    event AssetCreated (uint asset, uint price, bytes32 currency);
-    event StayCreated (uint asset, uint id, uint duration);
 
-    // We are using the unix epoch format.
-    struct Stay {
+    // all bookings are traked within this map
+    mapping(uint => mapping(uint => Booking)) public bookings;
+
+    // we need to query an already deployed exhange
+    ExchangeRates private exchangeRates;
+
+    // we need to attach to the good authority
+    PropertyAuthority private propertyAuthority;
+
+    // events
+    event AssetCreated (uint asset, uint price, bytes32 currency);
+    event BookingCreated (uint asset, uint id, uint duration);
+
+    struct Booking {
         uint startTime;
         uint endTime;
         address user;
     }
 
-    // Basic information about an asset, more details will be provided by ipfs.
     struct Asset {
         uint id;
         uint price;
         bytes32 currency;
     }
 
-    function Property(string _name, address _owner, address _exchangeContract) public payable {
+    constructor(string _id, address _owner, address _exchangeContract) public payable {
         setOwner(_owner);
         setAuthority(propertyAuthority);
-        name = _name;
-        // Make sure this contract is always calling the same exchange to convert user currency into ETH.
+        id = _id;
+        
+        // make sure this contract is always calling the same exchange to convert user currency into eth.
         exchangeRates = ExchangeRates(_exchangeContract);        
     }
 
-    // Asset management ////////////////
     function addAsset(uint price, bytes32 currency) onlyOwner public {
         require(exchangeRates.isCurrencyAllowed(currency));
 
+        // ids are generated with the last inserted id + 1
         uint newAssetId = assets.length;
-        StayLinkedList.initializeAssetList(newAssetId);
+
+        // initilize his weighted list to keep all bookings
+        WheightedLinkedList.initialize(newAssetId);
+
         assets.push(Asset(newAssetId, price, currency));
-        AssetCreated(newAssetId, price, currency);
+        emit AssetCreated(newAssetId, price, currency);
     }
 
-    function getAsset(uint id) public view returns (uint, uint, bytes32) {
-        Asset memory asset = assets[id];
+    function getAsset(uint _id) public view returns (uint, uint, bytes32) {
+        Asset memory asset = assets[_id];
         return (asset.id, asset.price, asset.currency);
     }
 
-    // Stay management ////////////////
-    function addStay(uint assetId, uint startTime, uint endTime) public payable {
+    function addBooking(uint assetId, uint startTime, uint endTime) public payable {
         require(endTime > startTime);
         require(now <= startTime);
         
-        // Check that duration is legitimate.
-        uint stayDurationInDays = (endTime - startTime) / 60 / 60 / 24;
+        // check that duration is legit
+        uint bookingDurationInDays = (endTime - startTime) / 60 / 60 / 24;
 
-        // Check if the amount of wei sent is sufficient.
-        uint weiPriceForTheStay = getStayPriceInWei(assetId, stayDurationInDays);
-        require(msg.value >= weiPriceForTheStay);
+        // check if the amount of wei sent is sufficient.
+        uint weiPriceForTheBooking = getBookingPriceInWei(assetId, bookingDurationInDays);
+        require(msg.value >= weiPriceForTheBooking);
 
-        // Here we'll need to return all surpluses to the paying user
+        // refunding all extra eth back to user
         // msg.value - weiPriceForTheStay -> return to msg.sender
 
-        // Add the stay within the linked list.
-        StayLinkedList.insertNode(assetId, startTime, endTime - startTime);
-        
-        // Map it within stays.
-        stays[assetId][startTime] = Stay(startTime, endTime, msg.sender);
-        StayCreated(assetId, startTime, stayDurationInDays);
+        // add the stay within the linked list
+        WheightedLinkedList.insertNode(assetId, startTime, bookingDurationInDays);
+        bookings[assetId][startTime] = Booking(startTime, endTime, msg.sender);
+        emit BookingCreated(assetId, startTime, bookingDurationInDays);
     }
 
-    function getStay(uint assetId, uint stayId) public view returns(uint, uint, address) {
-        Stay memory stay = stays[assetId][stayId];
-        return (stay.startTime, stay.endTime, stay.user);
+    function getStay(uint assetId, uint bookingId) public view returns(uint, uint, address) {
+        Booking memory booking = bookings[assetId][bookingId];
+        return (booking.startTime, booking.endTime, booking.user);
     }
 
-    function getStays(uint assetId, uint from, uint to) public view returns(uint[]) {
-        return StayLinkedList.getNodesBetween(assetId, from, to);
+    function getBookings(uint assetId, uint from, uint to) public view returns(uint[]) {
+        return WheightedLinkedList.getNodesBetween(assetId, from, to);
     }
 
-    function getStayPriceInWei(uint assetId, uint stayDurationInDays) public view returns(uint) {
-        require(stayDurationInDays > 0);
+    function getBookingPriceInWei(uint assetId, uint d) public view returns(uint) {
+        require(d > 0);
 
         Asset memory asset = assets[assetId];
-        uint weiPriceForSingleDay = ((asset.price * 100 * 1000 * 1000 * 1000 * 1000 * 1000 * 1000) / exchangeRates.getCurrencyRate(asset.currency));
-        uint weiPriceForTheStay = weiPriceForSingleDay * stayDurationInDays;
+        uint weiForOneDay = ((asset.price * 100 * 1000 * 1000 * 1000 * 1000 * 1000 * 1000) / exchangeRates.getCurrencyRate(asset.currency));
+        uint weiForWholeBooking = weiForOneDay * d;
 
-        return weiPriceForTheStay;
+        return weiForWholeBooking;
     }
 
     // TODO, this is somewhat obscur since we need this because id are created from 0 - inf

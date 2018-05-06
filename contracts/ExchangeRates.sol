@@ -1,4 +1,4 @@
-pragma solidity ^0.4.18;
+pragma solidity ^0.4.21;
 
 import "./Authorization.sol";
 import "./strings.sol";
@@ -12,35 +12,35 @@ contract ExchangeRates is usingOraclize, Authorization {
     mapping(bytes32 => bool) private supportedCurrencies;
     mapping(bytes32=>bool) private validIds;
 
-    function ExchangeRates() public payable {
-        // Initialize the delay
+    constructor() public payable {
+        // initialize the delay
         delay = 86400;
 
-        // This should only be used when deploying to a local rpc.
+        // this should only be used when deploying to a local rpc
         // OAR = OraclizeAddrResolverI(0x6f485C8BF6fc43eA212E93BBF8ce046C7f1cb475);
 
         getCurrenciesRate(0);
     }
 
     function __callback(bytes32 myid, string currencies) public {
-        // Make sure the call was done through our service.
+        // make sure the call was done through our service
         require(validIds[myid]);
         delete validIds[myid];
 
-        // Try to uncomment when we'll try on geth or ropsten testrpc seems to run out of gas.
+        // try to uncomment when we'll try on ganacge or rinkeby, testrpc seems to run out of gas
         //require(msg.sender == oraclize_cbAddress());
 
-        // This flatten the whole string into an array ['l','a','t','u','d','e'].
-        var currenciesRateStringArray = currencies.toSlice();
-        var currenciesDelimiter = "|".toSlice();
+        // this flatten the whole string into an array ['l','a','t','u','d','e'].
+        strings.slice memory currenciesRateStringArray = currencies.toSlice();
+        strings.slice memory currenciesDelimiter = "|".toSlice();
         uint numberOfParts = currenciesRateStringArray.count(currenciesDelimiter) + 1;
         
-        // Navigate through all parts that were seperated with an |.
+        // navigate through all parts that were seperated with '|'
         for (uint i = 0; i < numberOfParts; i++) {
-            var currency = currenciesRateStringArray.split(currenciesDelimiter).toString();    
-            var currencyStringArray = currency.toSlice();
-            // Slice the CAD;398.05
-            var currencyDelimeter = ";".toSlice();
+            string memory currency = currenciesRateStringArray.split(currenciesDelimiter).toString();    
+            strings.slice memory currencyStringArray = currency.toSlice();
+            // slice the XXX;999.99
+            strings.slice memory currencyDelimeter = ";".toSlice();
             
             bytes32 sigle = stringToBytes32(currencyStringArray.split(currencyDelimeter).toString());
             string memory price = currencyStringArray.split(currencyDelimeter).toString();

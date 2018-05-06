@@ -8,7 +8,7 @@ contract Authorization {
     Authority public authority;
     address public owner;
 
-    function Authorization() public {
+    constructor() public {
         owner = msg.sender;
     }
 
