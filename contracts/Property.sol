@@ -75,15 +75,15 @@ contract Property is Authorization, WheightedLinkedList {
         require(msg.value >= weiPriceForTheBooking);
 
         // refunding all extra eth back to user
-        // msg.value - weiPriceForTheStay -> return to msg.sender
+        // msg.value - weiPriceForTheBooking -> return to msg.sender
 
-        // add the stay within the linked list
+        // add the Booking within the linked list
         WheightedLinkedList.insertNode(assetId, startTime, bookingDurationInDays);
         bookings[assetId][startTime] = Booking(startTime, endTime, msg.sender);
         emit BookingCreated(assetId, startTime, bookingDurationInDays);
     }
 
-    function getStay(uint assetId, uint bookingId) public view returns(uint, uint, address) {
+    function getBooking(uint assetId, uint bookingId) public view returns(uint, uint, address) {
         Booking memory booking = bookings[assetId][bookingId];
         return (booking.startTime, booking.endTime, booking.user);
     }
