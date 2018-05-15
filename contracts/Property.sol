@@ -58,6 +58,11 @@ contract Property is Authorization, WheightedLinkedList {
         emit AssetCreated(newAssetId, price, currency);
     }
 
+    function withdraw(uint amount) onlyOwner public {
+        require(amount <= address(this).balance);
+        owner.transfer(amount);
+    }
+
     function getAsset(uint _id) public view returns (uint, uint, bytes32) {
         Asset memory asset = assets[_id];
         return (asset.id, asset.price, asset.currency);
